@@ -1,18 +1,18 @@
-#MODIFY the following variables (STUDENTID1, STUDENTID2, GROUP) with your infos
-STUDENTID1=HERE_ID_OF_THE_STUDENT
-STUDENTID2=HERE_ID_OF_THE_STUDENT
+#MODIFY the following variables (STUDENTIDS, GROUP) with your infos
+#STUDENTIDS should be a list of the student ids of all group members,
+#			e.g, STUDENTIDS=1111111 2222222 3333333 4444444
+STUDENTIDS=HERE_ID_STUDENT HERE_ID_STUDENT HERE_ID_STUDENT HERE_ID_STUDENT
 GROUP=HERE_GROUP_ID
 
-
-
 ASSIGNMENTS=$(filter assignment_%,$(wildcard *))
+EMPTY :=
+SPACE := $(EMPTY) $(EMPTY)
 
 .PHONY: $(ASSIGNMENTS)
 all: $(ASSIGNMENTS)
 
 $(ASSIGNMENTS):
 	$(MAKE) -C $@
-
 
 CFLAGS=-I./include
 .PHONY: clean submission demo
@@ -25,7 +25,7 @@ $(basename $(filter %.c,$(wildcard demo/*)) ): $(filter-out obj/main.o, $(OBJ))
 
 submission_%:
 	$(MAKE) -C assignment_$(patsubst submission_%,%,$@) clean
-	tar czfh heat_assignment_$(patsubst submission_%,%,$@)_group_$(GROUP)_$(STUDENTID1)_$(STUDENTID2).tar.gz assignment_$(patsubst submission_%,%,$@)
+	tar czfh heat_assignment_$(patsubst submission_%,%,$@)_group_$(GROUP)_$(subst $(SPACE),_,$(shell echo $(STUDENTIDS) | tr -s " ")).tar.gz assignment_$(patsubst submission_%,%,$@)
 
 clean:
 	-rm -f *.tar.gz
