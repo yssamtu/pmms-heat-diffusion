@@ -1,5 +1,4 @@
 # DAS-5 Cheat Sheet
-- In the first LC (02-03-2020) you will be assigned account names for DAS-5, a computing cluster that you will be expected to run some experiments on. 
 - DAS5 uses a scheduler called SLURM, the basic procedure to use it is first reserving a node (or a number of them) and then running your script on that node.
 - You are recommended to use the VU node of DAS-5 (fs0.das5.cs.vu.nl) 
 - You are not allowed to use the account name given to you for this course for any other work such as training NN etc...
