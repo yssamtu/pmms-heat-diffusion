@@ -55,22 +55,22 @@ preserve -llist
 - **BE AWARE: 15 minutes is the maximum time slot you should reserve!**
 - **In the output of your command you will see your reservation number**
 ```
-PRESERVE -NP 1 -NATIVE '-C CPUNODE' -T 15:00
+preserve -np 1 -native '-C cpunode' -t 15:00
 ```
 
 ### RUN CODE ON YOUR RESERVED NODE
 ```
-PRUN -NP 1 -RESERVE <RESERVATION_ID> CAT /PROC/CPUINFO
+prun -np 1 -reserve <RESERVATION_ID> cat /proc/cpuinfo
 ```
 ### GET A RANDOMLY ASSIGNED NODE AND RUN CODE ON IT
 ```
-PRUN -NP 1 CAT /PROC/CPUINFO
+prun -np 1 cat /proc/cpuinfo
 ```
 ### SCHEDULE A RESERVATION FOR A NODE WITH A GTX1080TI GPU ON CHRISTMAS DAY ( 25TH OF DECEMBER )STARTING AT MIDNIGHT AND 15 MINUTES FOR 15 MINUTES
 ```
-PRESERVE -NP 1 -NATIVE ’-C GPUNODE,GTX1080TI’ -S 12-25-00:15 -T 15:00
+preserve -np 1 -native '-C gpunode,RTX2080Ti' -s 12-25-00:15 -t 15:00
 ```
 ### CANCEL RESERVATION
 ```
-PRESERVE -C <RESERVATION_ID>
+preserve -c <RESERVATION_ID>
 ```
