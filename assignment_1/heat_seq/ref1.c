@@ -10,24 +10,24 @@ inline double get_upper_elem(const double row[], size_t size, size_t i)
     return i == size - 1 ? row[0] : row[i + 1];
 }
 
-inline size_t get_lower_row_index(size_t i)
+inline const double *get_lower_row_index(const double arr[], const struct parameters *p, size_t i)
 {
-    return !i ? i : i - 1;
+    return !i ? p->tinit : arr + (i - 1) * p->M;
 }
 
-inline size_t get_upper_row_index(size_t num_row, size_t i)
+inline const double *get_upper_row_index(const double arr[], const struct parameters *p, size_t i)
 {
-    return i == num_row - 1 ? i : i + 1;
+    return i == p->N - 1 ? p->tinit + i * p->M : arr + (i + 1) * p->M;
 }
 
 double get_sum_neighbours(const double arr[], const struct parameters *p, size_t i, size_t j, double w_direct, double w_diagonal)
 {
-    size_t r_offset = i * p->M;
-    double sum = (get_lower_elem(arr + r_offset, p->M, j) + get_upper_elem(arr + r_offset, p->M, j)) * w_direct;
-    r_offset = get_lower_row_index(i) * p->M;
-    sum += (get_lower_elem(arr + r_offset, p->M, j) + get_upper_elem(arr + r_offset, p->M, j)) * w_diagonal + arr[r_offset + j] * w_direct;
-    r_offset = get_upper_row_index(p->N, i) * p->M;
-    sum += (get_lower_elem(arr + r_offset, p->M, j) + get_upper_elem(arr + r_offset, p->M, j)) * w_diagonal + arr[r_offset + j] * w_direct;
+    const double *row = arr + i * p->M;
+    double sum = (get_lower_elem(row, p->M, j) + get_upper_elem(row, p->M, j)) * w_direct;
+    row = get_lower_row_index(arr, p, i);
+    sum += (get_lower_elem(row, p->M, j) + get_upper_elem(row, p->M, j)) * w_diagonal + row[j] * w_direct;
+    row = get_upper_row_index(arr, p, i);
+    sum += (get_lower_elem(row, p->M, j) + get_upper_elem(row, p->M, j)) * w_diagonal + row[j] * w_direct;
     return sum;
 }
 
