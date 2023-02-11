@@ -1,5 +1,4 @@
 #include <math.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -18,7 +17,8 @@ void do_compute(const struct parameters *p, struct results *r)
     const double *init = t1;
     double *avg = t2;
     r->time = 0.0;
-    clock_t start = clock();
+    struct timespec before = {0};
+    clock_gettime(CLOCK_MONOTONIC, &before);
     for (size_t iter = 1; iter <= p->maxiter; ++iter) {
         if (iter % p->period == 0 || iter == p->maxiter) {
             r->niter = iter;
@@ -26,18 +26,25 @@ void do_compute(const struct parameters *p, struct results *r)
             r->tmax = p->io_tmin;
             r->maxdiff = 0.0;
             r->tavg = 0.0;
+            struct timespec after = {0};
             if (caculate_metrix_with_st(init, avg, p, r, w_direct, w_diagonal)) {
-                r->time += (double)(clock() - start) / CLOCKS_PER_SEC;
+                clock_gettime(CLOCK_MONOTONIC, &after);
+                r->time = (double)(after.tv_sec - before.tv_sec) +
+                          (double)(after.tv_nsec - before.tv_nsec) / 1e9;
                 break;
             } else {
-                r->time += (double)(clock() - start) / CLOCKS_PER_SEC;
+                clock_gettime(CLOCK_MONOTONIC, &after);
+                r->time = (double)(after.tv_sec - before.tv_sec) +
+                          (double)(after.tv_nsec - before.tv_nsec) / 1e9;
                 if (p->printreports)
                     report_results(p, r);
-                start = clock();
             }
         } else {
             if (caculate_metrix(init, avg, p, r, w_direct, w_diagonal)) {
-                r->time += (double)(clock() - start) / CLOCKS_PER_SEC;
+                struct timespec after = {0};
+                clock_gettime(CLOCK_MONOTONIC, &after);
+                r->time = (double)(after.tv_sec - before.tv_sec) +
+                          (double)(after.tv_nsec - before.tv_nsec) / 1e9;
                 r->niter = iter;
                 r->tmin = p->io_tmax;
                 r->tmax = p->io_tmin;
