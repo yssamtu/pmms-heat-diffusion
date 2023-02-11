@@ -5,7 +5,7 @@
 #include "compute.h"
 #include "ref1.c"
 
-void do_compute(const struct parameters *p, struct results *r)
+void do_compute(const struct parameters * restrict p, struct results *restrict r)
 {
     const double sqrt2 = sqrt(2);
     const double w_direct = sqrt2 / (sqrt2 + 1) / 4;
@@ -16,7 +16,6 @@ void do_compute(const struct parameters *p, struct results *r)
     double t2[size];
     const double *init = t1;
     double *avg = t2;
-    r->time = 0.0;
     struct timespec before = {0};
     clock_gettime(CLOCK_MONOTONIC, &before);
     for (size_t iter = 1; iter <= p->maxiter; ++iter) {
@@ -50,7 +49,7 @@ void do_compute(const struct parameters *p, struct results *r)
                 r->tmax = p->io_tmin;
                 r->maxdiff = 0.0;
                 r->tavg = 0.0;
-                for (size_t i = 0, num = p->N * p->M; i < num; ++i) {
+                for (size_t i = 0; i < size; ++i) {
                     if (avg[i] < r->tmin)
                         r->tmin = avg[i];
                     if (avg[i] > r->tmax)
@@ -58,8 +57,9 @@ void do_compute(const struct parameters *p, struct results *r)
                     double diff = fabs(avg[i] - init[i]);
                     if (diff > r->maxdiff)
                         r->maxdiff = diff;
-                    r->tavg += avg[i] / num;
+                    r->tavg += avg[i];
                 }
+                r->tavg /= size;
                 break;
             }
         }
