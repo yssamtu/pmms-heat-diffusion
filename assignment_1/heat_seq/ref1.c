@@ -10,16 +10,16 @@ inline double get_upper_elem(const double *restrict row, size_t size, size_t i)
     return i == size - 1 ? row[0] : row[i + 1];
 }
 
-inline double *get_lower_row_index(const double *restrict init,
-                                   const struct parameters *restrict p,
-                                   size_t i)
+inline const double *get_lower_row_index(const double *restrict init,
+                                         const struct parameters *restrict p,
+                                         size_t i)
 {
     return !i ? p->tinit : init + i * p->M - p->M;
 }
 
-inline double *get_upper_row_index(const double *restrict init,
-                                   const struct parameters *restrict p,
-                                   size_t i)
+inline const double *get_upper_row_index(const double *restrict init,
+                                         const struct parameters *restrict p,
+                                         size_t i)
 {
     return i == p->N - 1 ? p->tinit + i * p->M : init + i * p->M + p->M;
 }
