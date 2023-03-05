@@ -4,30 +4,68 @@
 #include <getopt.h>
 #include <stdio.h>
 #include <ctype.h>
-#include <omp.h>
+#include <string.h>
 
 /* Ordering of the vector */
 typedef enum Ordering {ASCENDING, DESCENDING, RANDOM} Order;
 
 int debug = 0;
 
-/* Sort vector v of l elements using mergesort */
-void msort(int *v, long l){
-
-}
-
-void print_v(int *v, long l) {
+void print_v(int *v, long l)
+{
     printf("\n");
-    for(long i = 0; i < l; i++) {
-        if(i != 0 && (i % 10 == 0)) {
+    for (long i = 0; i < l; ++i) {
+        if (i && i % 10 == 0)
             printf("\n");
-        }
         printf("%d ", v[i]);
     }
     printf("\n");
 }
 
-int main(int argc, char **argv) {
+/*merge two list*/
+void merge(int *v, long left, long mid, long right, int *temp)
+{
+    long i = left;
+    long j = mid;
+    long k = left;
+    while (i < mid && j < right) {
+        if (v[i] <= v[j])
+            temp[k++] = v[i++];
+        else
+            temp[k++] = v[j++];
+    }
+    while (i < mid) {
+        temp[k++] = v[i++];
+    }
+    while (j < right) {
+        temp[k++] = v[j++];
+    }
+    memcpy(v+left ,temp+left,(right-left)*sizeof(int));
+}
+/*split the array untill the length of sub-array is 1*/
+void mergeSort_UpToDown(int *v, long left, long right, int *temp)
+{
+    if (right-left <= 1)
+        return;
+    long mid = left + (right-left)/2;
+    mergeSort_UpToDown(v, left, mid, temp);
+    mergeSort_UpToDown(v, mid, right, temp);
+
+    merge(v, left, mid, right, temp);
+}
+
+/* Sort vector v of l elements using mergesort, up to down*/
+void msort(int *v, long l)
+{
+    int *temp = (int *)malloc(l * sizeof(int));
+    long left = 0;
+    long right = l;
+    mergeSort_UpToDown(v, left, right, temp);
+    free(temp);
+}
+
+int main(int argc, char **argv)
+{
 
     int c;
     int seed = 42;
@@ -63,15 +101,12 @@ int main(int argc, char **argv) {
                 num_threads = atoi(optarg);
                 break;
             case '?':
-                if(optopt == 'l' || optopt == 's') {
+                if (optopt == 'l' || optopt == 's')
                     fprintf(stderr, "Option -%c requires an argument.\n", optopt);
-                }
-                else if(isprint(optopt)) {
+                else if (isprint(optopt))
                     fprintf(stderr, "Unknown option '-%c'.\n", optopt);
-                }
-                else {
+                else
                     fprintf(stderr, "Unknown option character '\\x%x'.\n", optopt);
-                }
                 return -1;
             default:
                 return -1;
@@ -82,34 +117,32 @@ int main(int argc, char **argv) {
     srand(seed);
 
     /* Allocate vector. */
-    vector = (int*)malloc(length*sizeof(int));
-    if(vector == NULL) {
+    vector = (int *)malloc(length * sizeof(int));
+    if (vector == NULL) {
         fprintf(stderr, "Malloc failed...\n");
         return -1;
     }
-
     /* Fill vector. */
-    switch(order){
+    switch(order) {
         case ASCENDING:
-            for(long i = 0; i < length; i++) {
+            for (long i = 0; i < length; ++i) {
                 vector[i] = (int)i;
             }
             break;
         case DESCENDING:
-            for(long i = 0; i < length; i++) {
+            for (long i = 0; i < length; ++i) {
                 vector[i] = (int)(length - i);
             }
             break;
         case RANDOM:
-            for(long i = 0; i < length; i++) {
+            for (long i = 0; i < length; ++i) {
                 vector[i] = rand();
             }
             break;
     }
 
-    if(debug) {
+    if (debug)
         print_v(vector, length);
-    }
 
     clock_gettime(CLOCK_MONOTONIC, &before);
 
@@ -122,9 +155,8 @@ int main(int argc, char **argv) {
 
     printf("Mergesort took: % .6e seconds \n", time);
 
-    if(debug) {
+    if (debug)
         print_v(vector, length);
-    }
 
     return 0;
 }

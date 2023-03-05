@@ -1,15 +1,11 @@
 #include <time.h>
 #include <math.h>
 #include <stdlib.h>
-#include <omp.h>
-#include <stdio.h>
-
-// #define GEN_PICTURES
 
 #include "compute.h"
 #include "ref1.c"
 
-void do_compute(const struct parameters* p, struct results *r)
+void do_compute(const struct parameters *p, struct results *r)
 {
     size_t i, j;
 
@@ -31,15 +27,7 @@ void do_compute(const struct parameters* p, struct results *r)
     static const double c_cdir = 0.25 * M_SQRT2 / (M_SQRT2 + 1.0);
     static const double c_cdiag = 0.25 / (M_SQRT2 + 1.0);
 
-    /* set thread */
-    #ifdef OMP
-    omp_set_num_threads(p->nthreads);
-    #endif
-
     /* set initial temperatures and conductivities */
-    #ifdef OMP
-    #pragma omp parallel for schedule(static, (int)((p->N + p->nthreads - 1) / p->nthreads))
-    #endif
     for (i = 1; i < h - 1; ++i) {
         for (j = 1; j < w - 1; ++j) {
             g1[i][j] = (*tinit)[i - 1][j - 1];
@@ -48,9 +36,6 @@ void do_compute(const struct parameters* p, struct results *r)
     }
 
     /* smear outermost row to border */
-    #ifdef OMP
-    #pragma omp parallel for schedule(static, (int)((p->M + p->nthreads - 1) / p->nthreads))
-    #endif
     for (j = 1; j < w - 1; ++j) {
         g1[0][j] = g2[0][j] = g1[1][j];
         g1[h - 1][j] = g2[h - 1][j] = g1[h - 2][j];
@@ -68,31 +53,21 @@ void do_compute(const struct parameters* p, struct results *r)
     clock_gettime(CLOCK_MONOTONIC, &before);
 
     for (iter = 1; iter <= p->maxiter; ++iter) {
-        
+        /* swap source and destination */
         void *tmp = src;
         src = dst;
         dst = tmp;
 
-        double maxdiff = 0.0;
-        #ifdef OMP
-        #pragma omp parallel shared(maxdiff)
-        #endif
-        {
-
-        #ifdef OMP
-        #pragma omp for schedule(static, (int)((h + p->nthreads - 1)/p->nthreads))
-        #endif
+        /* initialize halo on source */
         for (i = 0; i < h; ++i) {
             (*src)[i][w - 1] = (*src)[i][1];
             (*src)[i][0] = (*src)[i][w - 2];
         }
-        
-        #ifdef OMP
-        #pragma omp for reduction (max: maxdiff) schedule(static, (int)((p->N + p->nthreads - 1)/p->nthreads))
-        #endif
+
+        double maxdiff = 0.0;
+        /* compute */
         for (i = 1; i < h - 1; ++i) {
             for (j = 1; j < w - 1; ++j) {
-
                 double coef = c[i][j];
                 double restcoef = 1.0 - coef;
 
@@ -109,22 +84,20 @@ void do_compute(const struct parameters* p, struct results *r)
                 if (diff > maxdiff) maxdiff = diff;
             }
         }
-        }
         r->maxdiff = maxdiff;
         if (maxdiff < p->threshold) {
             ++iter;
             break;
-        }
+        } 
         /* conditional reporting */
         if (iter % p->period == 0) {
             fill_report(p, r, h, w, dst, src, iter, &before);
             if(p->printreports) report_results(p, r);
         }
+        //#ifdef GEN_PICTURES
+        //do_draw(p, iter, h, w, src);
+        //#endif
     }
-
-    // #ifdef GEN_PICTURES
-    // do_draw(p, iter, h, w, src);
-    // #endif
 
     /* report at end in all cases */
     --iter;

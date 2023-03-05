@@ -6,10 +6,10 @@ OBJ=$(patsubst %.c,%.o,$(SRC))
 CC=gcc
 INCLUDES=-I../../include
 ifndef DEBUG
-CFLAGS=-Ofast -std=gnu99 -fopenmp
+CFLAGS=-O3 -fopt-info-vec-all -std=gnu99 -lm
 LIB=
 else
-CFLAGS=-O0 -g3 -std=gnu99 -fopenmp
+CFLAGS=-O0 -g3 -std=gnu99
 LIB=
 endif
 
