@@ -10,7 +10,7 @@
 enum {
     CONSUMED = -1,
     END = -2,
-    BUF_SIZE = 1
+    BUF_SIZE = 96
 };
 
 typedef struct {
@@ -183,12 +183,12 @@ static void *comparator(void *inout_set)
     input = in_set->buf + (input - in_set->buf + 1) % BUF_SIZE;
     input_lock = in_set->lock + (input_lock - in_set->lock + 1) % BUF_SIZE;
     // Other elements
-    pthread_mutex_lock(output_lock);
-    if (*output != CONSUMED)
-        pthread_cond_wait(out_set->space, output_lock);
     pthread_mutex_lock(input_lock);
     if (*input == CONSUMED)
         pthread_cond_wait(in_set->item, input_lock);
+    pthread_mutex_lock(output_lock);
+    if (*output != CONSUMED)
+        pthread_cond_wait(out_set->space, output_lock);
     while (*input != END) {
         if (*input <= buf) {
             *output = *input;
@@ -210,12 +210,12 @@ static void *comparator(void *inout_set)
         output_lock = out_set->lock + (output_lock - out_set->lock + 1) % BUF_SIZE;
         input = in_set->buf + (input - in_set->buf + 1) % BUF_SIZE;
         input_lock = in_set->lock + (input_lock - in_set->lock + 1) % BUF_SIZE;
-        pthread_mutex_lock(output_lock);
-        if (*output != CONSUMED)
-            pthread_cond_wait(out_set->space, output_lock);
         pthread_mutex_lock(input_lock);
         if (*input == CONSUMED)
             pthread_cond_wait(in_set->item, input_lock);
+        pthread_mutex_lock(output_lock);
+        if (*output != CONSUMED)
+            pthread_cond_wait(out_set->space, output_lock);
     }
     // First END
     *output = *input;
@@ -230,12 +230,12 @@ static void *comparator(void *inout_set)
     input_lock = in_set->lock + (input_lock - in_set->lock + 1) % BUF_SIZE;
     // Buf elements
     while (buf != END) {
-        pthread_mutex_lock(output_lock);
-        if (*output != CONSUMED)
-            pthread_cond_wait(out_set->space, output_lock);
         pthread_mutex_lock(input_lock);
         if (*input == CONSUMED)
             pthread_cond_wait(in_set->item, input_lock);
+        pthread_mutex_lock(output_lock);
+        if (*output != CONSUMED)
+            pthread_cond_wait(out_set->space, output_lock);
         *output = buf;
         pthread_cond_signal(out_set->item);
         pthread_mutex_unlock(output_lock);
