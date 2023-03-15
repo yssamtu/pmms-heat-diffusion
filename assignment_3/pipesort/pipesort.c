@@ -26,7 +26,7 @@ typedef struct {
 } inout_set_t;
 
 static void *comparator(void *inout_set);
-static void *successor(void *output);
+static void *outputter(void *output);
 
 int main(int argc, char *argv[])
 {
@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
     // Create threads
     for (long i = 0; i < length; ++i) {
         if (pthread_create(&comparator_thread[i], &attr, comparator, &inout_set[i])) {
-            perror("Comparator");
+            perror("Creating comparator");
             // Destroy attr, mutex and cond
             pthread_attr_destroy(&attr);
             for (long i = 0; i < (length + 1) * BUF_SIZE; ++i)
@@ -106,8 +106,8 @@ int main(int argc, char *argv[])
             return 1;
         }
     }
-    if (pthread_create(&successor_thread, &attr, successor, &buf_set)) {
-        perror("Successor");
+    if (pthread_create(&successor_thread, &attr, outputter, &buf_set)) {
+        perror("Creating outputter");
         // Destroy attr, mutex and cond
         pthread_attr_destroy(&attr);
         for (long i = 0; i < (length + 1) * BUF_SIZE; ++i)
@@ -258,7 +258,7 @@ static void *comparator(void *inout_set)
     return NULL;
 }
 
-static void *successor(void *buf_set)
+static void *outputter(void *buf_set)
 {
     buf_set_t *b_set = buf_set;
     int *buf = b_set->buf;
