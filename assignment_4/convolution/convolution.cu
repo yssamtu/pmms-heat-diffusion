@@ -1,23 +1,34 @@
-#include <stdio.h>
-#include <string.h>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <iostream>
+#include <cuda_runtime.h>
+// #include <cstring>
 #include "timer.h"
 
-#define image_height 1024
-#define image_width 1024
-#define filter_height 5
-#define filter_width 5
+enum {
+    image_height = 1024,
+    image_width = 1024,
+    filter_height = 5,
+    filter_width = 5,
+    border_height =  filter_height & -2,
+    border_width = filter_width & -2,
+    input_height = image_height + border_height,
+    input_width = image_width + border_width,
+    block_size_x = 32,
+    block_size_y = 16,
+    SEED = 1234
+};
 
-#define border_height ((filter_height/2)*2)
-#define border_width ((filter_width/2)*2)
-#define input_height (image_height + border_height)
-#define input_width (image_width + border_width)
-
-#define block_size_x 32
-#define block_size_y 16
-
-#define SEED 1234
-
-using namespace std;
+using std::isnan;
+using std::fprintf;
+using std::printf;
+using std::puts;
+using std::calloc;
+using std::free;
+using std::malloc;
+using std::cout;
+using std::endl;
 
 void convolutionSeq(float *output, float *input, float *filter) {
     //for each pixel in the output image
@@ -26,16 +37,16 @@ void convolutionSeq(float *output, float *input, float *filter) {
   
   sequentialTime.start();
 
-    for (int y=0; y < image_height; y++) {
-        for (int x=0; x < image_width; x++) { 
-	    output[y*image_width+x]=0;
+    for (int y = 0; y < image_height; ++y) {
+        for (int x = 0; x < image_width; ++x) { 
+	        output[y * image_width + x] = 0.0f;
             //for each filter weight
-            for (int i=0; i < filter_height; i++) {
-                for (int j=0; j < filter_width; j++) {
-                    output[y*image_width+x] += input[(y+i)*input_width+x+j] * filter[i*filter_width+j];
+            for (int i = 0; i < filter_height; ++i) {
+                for (int j = 0; j < filter_width; ++j) {
+                    output[y * image_width + x] += input[(y + i) * input_width + x + j] * filter[i * filter_width + j];
                 }
             }
-	    output[y*image_width+x] /= 35;
+	        output[y * image_width + x] /= 35.0f;
         }
     }
   
@@ -56,29 +67,35 @@ void convolutionCUDA(float *output, float *input, float *filter) {
     timer memoryTime = timer("memoryTime");
 
     // memory allocation
-    err = cudaMalloc((void **)&d_input, input_height*input_width*sizeof(float));
-    if (err != cudaSuccess) { fprintf(stderr, "Error in cudaMalloc d_input: %s\n", cudaGetErrorString( err )); }
-    err = cudaMalloc((void **)&d_output, image_height*image_width*sizeof(float));
-    if (err != cudaSuccess) { fprintf(stderr, "Error in cudaMalloc d_output: %s\n", cudaGetErrorString( err )); }
-    err = cudaMalloc((void **)&d_filter, filter_height*filter_width*sizeof(float));
-    if (err != cudaSuccess) { fprintf(stderr, "Error in cudaMalloc d_filter: %s\n", cudaGetErrorString( err )); }
+    err = cudaMalloc((void **)&d_input, input_height * input_width * sizeof(float));
+    if (err != cudaSuccess)
+        fprintf(stderr, "Error in cudaMalloc d_input: %s\n", cudaGetErrorString(err));
+    err = cudaMalloc((void **)&d_output, image_height * image_width * sizeof(float));
+    if (err != cudaSuccess)
+        fprintf(stderr, "Error in cudaMalloc d_output: %s\n", cudaGetErrorString(err));
+    err = cudaMalloc((void **)&d_filter, filter_height * filter_width * sizeof(float));
+    if (err != cudaSuccess)
+        fprintf(stderr, "Error in cudaMalloc d_filter: %s\n", cudaGetErrorString(err));
 
     memoryTime.start();
     // host to device 
-    err = cudaMemcpy(d_input, input, input_height*input_width*sizeof(float), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) { fprintf(stderr, "Error in cudaMemcpy host to device input: %s\n", cudaGetErrorString( err ));  }
-    err = cudaMemcpy(d_filter, filter, filter_height*filter_width*sizeof(float), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) { fprintf(stderr, "Error in cudaMemcpy host to device filter: %s\n", cudaGetErrorString( err ));  }
+    err = cudaMemcpy(d_input, input, input_height * input_width * sizeof(float), cudaMemcpyHostToDevice);
+    if (err != cudaSuccess)
+        fprintf(stderr, "Error in cudaMemcpy host to device input: %s\n", cudaGetErrorString(err));
+    err = cudaMemcpy(d_filter, filter, filter_height * filter_width * sizeof(float), cudaMemcpyHostToDevice);
+    if (err != cudaSuccess)
+        fprintf(stderr, "Error in cudaMemcpy host to device filter: %s\n", cudaGetErrorString(err));
     
     // zero the result array 
-    err = cudaMemset(d_output, 0, image_height*image_width*sizeof(float));
-    if (err != cudaSuccess) { fprintf(stderr, "Error in cudaMemset output: %s\n", cudaGetErrorString( err ));  }
+    err = cudaMemset(d_output, 0, image_height * image_width * sizeof(float));
+    if (err != cudaSuccess)
+        fprintf(stderr, "Error in cudaMemset output: %s\n", cudaGetErrorString(err));
     memoryTime.stop();
     //setup the grid and thread blocks
     //thread block size
     dim3 threads(block_size_x, block_size_y);
     //problem size divided by thread block size rounded up
-    dim3 grid(int(ceilf(image_width/(float)threads.x)), int(ceilf(image_height/(float)threads.y)) );
+    dim3 grid(int(ceilf(image_width / (float)threads.x)), int(ceilf(image_height / (float)threads.y)));
 
     //measure the GPU function
     kernelTime.start();
@@ -88,20 +105,25 @@ void convolutionCUDA(float *output, float *input, float *filter) {
  
     //check to see if all went well
     err = cudaGetLastError();
-    if (err != cudaSuccess) { fprintf(stderr, "Error during kernel launch convolution_kernel: %s\n", cudaGetErrorString( err )); }
+    if (err != cudaSuccess)
+        fprintf(stderr, "Error during kernel launch convolution_kernel: %s\n", cudaGetErrorString(err));
 
     //copy the result back to host memory
     memoryTime.start();
-    err = cudaMemcpy(output, d_output, image_height*image_width*sizeof(float), cudaMemcpyDeviceToHost);
+    err = cudaMemcpy(output, d_output, image_height * image_width * sizeof(float), cudaMemcpyDeviceToHost);
     memoryTime.stop();
-    if (err != cudaSuccess) { fprintf(stderr, "Error in cudaMemcpy device to host output: %s\n", cudaGetErrorString( err )); }
+    if (err != cudaSuccess)
+        fprintf(stderr, "Error in cudaMemcpy device to host output: %s\n", cudaGetErrorString(err));
  
     err = cudaFree(d_input);
-    if (err != cudaSuccess) { fprintf(stderr, "Error in freeing d_input: %s\n", cudaGetErrorString( err )); }
+    if (err != cudaSuccess)
+        fprintf(stderr, "Error in freeing d_input: %s\n", cudaGetErrorString(err));
     err = cudaFree(d_output);
-    if (err != cudaSuccess) { fprintf(stderr, "Error in freeing d_output: %s\n", cudaGetErrorString( err )); }
+    if (err != cudaSuccess)
+        fprintf(stderr, "Error in freeing d_output: %s\n", cudaGetErrorString(err));
     err = cudaFree(d_filter);
-    if (err != cudaSuccess) { fprintf(stderr, "Error in freeing d_filter: %s\n", cudaGetErrorString( err )); }
+    if (err != cudaSuccess)
+        fprintf(stderr, "Error in freeing d_filter: %s\n", cudaGetErrorString(err));
 
     cout << "convolution (kernel): \t\t" << kernelTime << endl;
     cout << "convolution (memory): \t\t" << memoryTime << endl;
@@ -112,22 +134,22 @@ int compare_arrays(float *a1, float *a2, int n) {
     int errors = 0;
     int print = 0;
 
-    for (int i=0; i<n; i++) {
+    for (int i = 0; i < n; ++i) {
 
         if (isnan(a1[i]) || isnan(a2[i])) {
-            errors++;
+            ++errors;
             if (print < 10) {
-                print++;
-                fprintf(stderr, "Error NaN detected at i=%d,\t a1= %10.7e \t a2= \t %10.7e\n",i,a1[i],a2[i]);
+                ++print;
+                fprintf(stderr, "Error NaN detected at i=%d,\t a1= %10.7e \t a2= \t %10.7e\n", i, a1[i], a2[i]);
             }
         }
 
-        float diff = (a1[i]-a2[i])/a1[i];
+        float diff = (a1[i] - a2[i]) / a1[i];
         if (diff > 1e-6f) {
-            errors++;
+            ++errors;
             if (print < 10) {
-                print++;
-                fprintf(stderr, "Error detected at i=%d, \t a1= \t %10.7e \t a2= \t %10.7e \t rel_error=\t %10.7e\n",i,a1[i],a2[i],diff);
+                ++print;
+                fprintf(stderr, "Error detected at i=%d, \t a1= \t %10.7e \t a2= \t %10.7e \t rel_error=\t %10.7e\n", i, a1[i], a2[i], diff);
             }
         }
 
@@ -137,45 +159,50 @@ int compare_arrays(float *a1, float *a2, int n) {
 }
         
 
-int main() {
-    int i; 
-    int errors=0;
-
+int main()
+{
     //allocate arrays and fill them
-    float *input = (float *) malloc(input_height * input_width * sizeof(float));
-    float *output1 = (float *) calloc(image_height * image_width, sizeof(float));
-    float *output2 = (float *) calloc(image_height * image_width, sizeof(float));
-    float *filter = (float *) malloc(filter_height * filter_width * sizeof(float));
+    float *input = (float *)malloc(input_height * input_width * sizeof(float));
+    float *output1 = (float *)calloc(image_height * image_width, sizeof(float));
+    float *output2 = (float *)calloc(image_height * image_width, sizeof(float));
+    float *filter = (float *)malloc(filter_height * filter_width * sizeof(float));
 
-    for (i=0; i< input_height * input_width; i++) {
-        input[i] = (float) (i % SEED);
+    for (int i = 0; i < input_height * input_width; ++i) {
+        input[i] = (float)(i % SEED);
     }
 
 //THis is specific for a W==H smoothening filteri, where W and H are odd.
-    for (i=0; i<filter_height * filter_width; i++) { 
-      filter[i] = 1.0;
+    for (int i = 0; i < filter_height * filter_width; ++i) { 
+        filter[i] = 1.0f;
     }
 
-    for (i=filter_width+1; i<(filter_height - 1) * filter_width; i++) {
-	if (i % filter_width > 0 && i % filter_width < filter_width-1) filter[i]+=1.0; 
+    for (int i = filter_width + 1; i < (filter_height - 1) * filter_width; ++i) {
+	    if (i % filter_width > 0 && i % filter_width < filter_width - 1)
+            filter[i] += 1.0f; 
     }
 
-    filter[filter_width*filter_height/2]=3.0;
+    filter[filter_width * filter_height >> 1] = 3.0f;
+
+    for (int i = 0; i < filter_height; ++i) {
+        for (int j = 0; j < filter_width; ++j) {
+            printf("%f ", filter[i * filter_width + j]);
+        }
+        puts("");
+    }
 //end initialization
    
-    //measure the CPU function
-    convolutionSeq(output1, input, filter);
-    //measure the GPU function
-    convolutionCUDA(output2, input, filter);
+    // //measure the CPU function
+    // convolutionSeq(output1, input, filter);
+    // //measure the GPU function
+    // convolutionCUDA(output2, input, filter);
 
 
-    //check the result
-    errors += compare_arrays(output1, output2, image_height*image_width);
-    if (errors > 0) {
-        printf("TEST FAILED! %d errors!\n", errors);
-    } else {
-        printf("TEST PASSED!\n");
-    }
+    // //check the result
+    // int errors += compare_arrays(output1, output2, image_height * image_width);
+    // if (errors > 0)
+    //     printf("TEST FAILED! %d errors!\n", errors);
+    // else
+    //     puts("TEST PASSED!");
 
 
     free(filter);
