@@ -97,15 +97,13 @@ __global__ void convolution_kernel_naive(float *output, float *input, float *fil
 {
     unsigned y = blockIdx.y * blockDim.y + threadIdx.y;
     unsigned x = blockIdx.x * blockDim.x + threadIdx.x;
-    if (y < image_height && x < image_width) {
-        float result = 0.0f;
-        for (int i = 0; i < filter_height; ++i) {
-            for (int j = 0; j < filter_width; ++j) {
-                result += input[(y + i) * input_width + x + j] * filter[i * filter_width + j];
-            }
+    float result = 0.0f;
+    for (int i = 0; i < filter_height; ++i) {
+        for (int j = 0; j < filter_width; ++j) {
+            result += input[(y + i) * input_width + x + j] * filter[i * filter_width + j];
         }
-        output[y * image_width + x] = result / 35.0f;
     }
+    output[y * image_width + x] = result / 35.0f;
 }
 
 static void convolutionCUDA(float *output, float *input, float *filter)
