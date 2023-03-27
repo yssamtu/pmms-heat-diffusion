@@ -97,10 +97,14 @@ __global__ void convolution_kernel_naive(float *output, float *input, float *fil
 {
     unsigned y = blockIdx.y * blockDim.y + threadIdx.y;
     unsigned x = blockIdx.x * blockDim.x + threadIdx.x;
+    __shared__ float sh_filter[filter_height * filter_width];
+    if (threadIdx.y < filter_height && threadIdx.x < filter_width)
+        sh_filter[threadIdx.y * filter_width + threadIdx.x] = filter[threadIdx.y * filter_width + threadIdx.x];
+    __syncthreads();
     float result = 0.0f;
     for (int i = 0; i < filter_height; ++i) {
         for (int j = 0; j < filter_width; ++j) {
-            result += input[(y + i) * input_width + x + j] * filter[i * filter_width + j];
+            result += input[(y + i) * input_width + x + j] * sh_filter[i * filter_width + j];
         }
     }
     output[y * image_width + x] = result / 35.0f;
