@@ -1,9 +1,7 @@
 #include <cmath>
 #include <cstdio>
-#include <cstdlib>
 #include <iostream>
 #include <cuda_runtime.h>
-// #include <cstring>
 #include "timer.h"
 
 enum {
@@ -16,7 +14,9 @@ enum {
     input_height = image_height + border_height,
     input_width = image_width + border_width,
     block_size_x = 32,
-    block_size_y = 16,
+    block_size_y = 8,
+    sh_input_height = block_size_y + border_height,
+    sh_input_width = block_size_x + border_width,
     SEED = 1234
 };
 
@@ -24,9 +24,6 @@ using std::isnan;
 using std::fprintf;
 using std::printf;
 using std::puts;
-using std::calloc;
-using std::free;
-using std::malloc;
 using std::cout;
 using std::endl;
 
@@ -38,10 +35,10 @@ static int compare_arrays(float *a1, float *a2, int n);
 int main()
 {
     // Allocate arrays and fill them
-    float *input = static_cast<float *>(malloc(input_height * input_width * sizeof(float)));
-    float *output1 = static_cast<float *>(calloc(image_height * image_width, sizeof(float)));
-    float *output2 = static_cast<float *>(calloc(image_height * image_width, sizeof(float)));
-    float *filter = static_cast<float *>(malloc(filter_height * filter_width * sizeof(float)));
+    float *input = new float[input_height * input_width];
+    float *output1 = new float[image_height * image_width];
+    float *output2 = new float[image_height * image_width];
+    float *filter = new float[filter_height * filter_width];
     for (int i = 0; i < input_height * input_width; ++i) {
         input[i] = static_cast<float>(i % SEED);
     }
@@ -65,10 +62,10 @@ int main()
         printf("TEST FAILED! %d errors!\n", errors);
     else
         puts("TEST PASSED!");
-    free(input);
-    free(output1);
-    free(output2);
-    free(filter);
+    delete[] input;
+    delete[] output1;
+    delete[] output2;
+    delete[] filter;
     return 0;
 }
 
@@ -97,17 +94,60 @@ __global__ void convolution_kernel_naive(float *output, float *input, float *fil
 {
     unsigned y = blockIdx.y * blockDim.y + threadIdx.y;
     unsigned x = blockIdx.x * blockDim.x + threadIdx.x;
-    __shared__ float sh_filter[filter_height * filter_width];
-    if (threadIdx.y < filter_height && threadIdx.x < filter_width)
-        sh_filter[threadIdx.y * filter_width + threadIdx.x] = filter[threadIdx.y * filter_width + threadIdx.x];
-    __syncthreads();
-    float result = 0.0f;
-    for (int i = 0; i < filter_height; ++i) {
-        for (int j = 0; j < filter_width; ++j) {
-            result += input[(y + i) * input_width + x + j] * sh_filter[i * filter_width + j];
+    __shared__ float sh_input[sh_input_height][sh_input_width];
+    if (y < input_height && x < input_width) {
+        if (threadIdx.y == blockDim.y - 1) {
+            if (threadIdx.x == blockDim.x - 1) {
+                for (int i = 0; i <= border_height; ++i) {
+                    for (int j = 0; j <= border_width; ++j) {
+                        sh_input[threadIdx.y + i][threadIdx.x + j] = input[(y + i) * input_width + x + j];
+                    }
+                }
+            } else {
+                for (int i = 0; i <= border_height; ++i) {
+                    sh_input[threadIdx.y + i][threadIdx.x] = input[(y + i) * input_width + x];
+                }
+            }
+        } else if (threadIdx.x == blockDim.x - 1) {
+            for (int i = 0; i <= border_width; ++i) {
+                sh_input[threadIdx.y][threadIdx.x + i] = input[y * input_width + x + i];
+            }
+        } else {
+            sh_input[threadIdx.y][threadIdx.x] = input[y * input_width + x];
         }
     }
-    output[y * image_width + x] = result / 35.0f;
+    __shared__ float sh_filter[filter_height][filter_width];
+    if (threadIdx.y < filter_height && threadIdx.x < filter_width) {
+        if (threadIdx.y == blockDim.y - 1) {
+            if (threadIdx.x == blockDim.x - 1) {
+                for (int i = threadIdx.y; i < filter_height; ++i) {
+                    for (int j = threadIdx.x; i < filter_width; ++j) {
+                        sh_filter[i][j] = filter[i * filter_width + j];
+                    }
+                }
+            } else {
+                for (int i = threadIdx.y; i < filter_height; ++i) {
+                    sh_filter[i][threadIdx.x] = filter[i * filter_width + threadIdx.x];
+                }
+            }
+        } else if (threadIdx.x == blockDim.x - 1) {
+            for (int i = threadIdx.x; i < filter_width; ++i) {
+                sh_filter[threadIdx.y][i] = filter[threadIdx.y * filter_width + i];
+            }
+        } else {
+            sh_filter[threadIdx.y][threadIdx.x] = filter[threadIdx.y * filter_width + threadIdx.x];
+        }
+    }
+    __syncthreads();
+    if (y < image_height && x < image_width) {
+        float result = 0.0f;
+        for (int i = 0; i < filter_height; ++i) {
+            for (int j = 0; j < filter_width; ++j) {
+                result += sh_input[threadIdx.y + i][threadIdx.x + j] * sh_filter[i][j];
+            }
+        }
+        output[y * image_width + x] = result / 35.0f;
+    }
 }
 
 static void convolutionCUDA(float *output, float *input, float *filter)
@@ -125,20 +165,25 @@ static void convolutionCUDA(float *output, float *input, float *filter)
     err = cudaMalloc(&d_filter, filter_height * filter_width * sizeof(float));
     if (err != cudaSuccess)
         fprintf(stderr, "Error in cudaMalloc d_filter: %s\n", cudaGetErrorString(err));
+    cudaStream_t stream[3];
+    for (int i = 0; i < 3; ++i) {
+        cudaStreamCreate(&stream[i]);
+    }
     timer memoryTime = timer("memoryTime");
     memoryTime.start();
     // Host to device
-    err = cudaMemcpy(d_input, input, input_height * input_width * sizeof(float), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess)
-        fprintf(stderr, "Error in cudaMemcpy host to device input: %s\n", cudaGetErrorString(err));
-    err = cudaMemcpy(d_filter, filter, filter_height * filter_width * sizeof(float), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess)
-        fprintf(stderr, "Error in cudaMemcpy host to device filter: %s\n", cudaGetErrorString(err));
+    cudaMemcpyAsync(d_input, input, input_height * input_width * sizeof(float), cudaMemcpyHostToDevice, stream[0]);
+    cudaMemcpyAsync(d_filter, filter, filter_height * filter_width * sizeof(float), cudaMemcpyHostToDevice, stream[1]);
     // Zero the result array
-    err = cudaMemset(d_output, 0, image_height * image_width * sizeof(float));
-    if (err != cudaSuccess)
-        fprintf(stderr, "Error in cudaMemset output: %s\n", cudaGetErrorString(err));
+    cudaMemsetAsync(d_output, 0, image_height * image_width * sizeof(float), stream[2]);
+    for (int i = 0; i < 3; ++i) {
+        cudaStreamSynchronize(stream[i]);
+    }
+    err = cudaGetLastError();
     memoryTime.stop();
+    for (int i = 0; i < 3; ++i) {
+        cudaStreamDestroy(stream[i]);
+    }
     // Set up the grid and thread blocks
     // Thread block size
     dim3 threads(block_size_x, block_size_y);
